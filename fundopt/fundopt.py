@@ -9,7 +9,7 @@ import os
 import logging
 
 
-class FundOptimiser(object):
+class FundOptimizer(object):
 
 
     __metaclass__ = ABCMeta
@@ -124,7 +124,7 @@ class FundOptimiser(object):
         return optPos
 
 
-class FundTargetRetOptimiser(FundOptimiser):
+class FundTargetRetOptimiser(FundOptimizer):
 
     def __init__(self, targetRet = 0.01, *args, **kwargs):
         super(FundTargetRetOptimiser, self).__init__( *args, **kwargs )
