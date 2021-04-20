@@ -7,18 +7,6 @@ url_of  = 'http://stock.finance.sina.com.cn/fundInfo/api/openapi.php/CaihuiFundI
 
 class OpenFundTSLoaderSinaMixin( object ):
 
-    def getLocalData( self ):
-        """
-        Read from local cache, return the dataframe and available dates in the cache
-        """
-
-        localData = pd.read_csv( os.path.join(self.localPrefix, '%s.csv' % self.fundCode), 
-                                index_col = 0, parse_dates = True,
-                                )
-        dates     = localData.index.tolist()
-
-        return localData, dates
-
     def writeLocalData( self, dataDf ):
         """
         Write to local cache in CSV format

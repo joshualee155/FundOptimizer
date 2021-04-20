@@ -4,95 +4,81 @@ import pandas as pd
 import datetime as dt
 from abc import ABCMeta, abstractmethod
 from fundopt.fundtsloader import fundTSLoaderResolver
-from fundopt.fundtcloader import FundTransactionCostLoader
+from fundopt.fundtcloader import fundTransactionCost as ftc
 import os
 import logging
 
 
-class FundOptimizer(object):
-
+class BaseFundOptimizer(object):
 
     __metaclass__ = ABCMeta
 
-    cvxConstraints   = []
-    cvxObjectiveFunc = None
-    cvxProblem       = None
-    cvxPosition      = None
+    cvxConstraints = []
+    cvxObjective = None
+    cvxProblem   = None
+    cvxTrades    = None
 
-    Ret              = None
+    def __init__(self, returns, longOnly=True):
+        """        
+        Arguments:
+            returns {pd.DataFrame} -- DataFrame of fund returns with index being dates and columns being fund codes
+        """
+        self.returns = returns
+        self.fundList = returns.columns
+        self.longOnly = longOnly
 
-    def __init__(self,
-                 startDate       = dt.date(2015, 11, 4),
-                 endDate         = dt.date(2016, 11, 4),
-                 holdingPeriod   = 30,
-                 longOnly        = True,
-                 fundList        = [],
-                 currentPosition = [], 
-                 **kwargs):
-        assert(len(fundList) == len(currentPosition))
-        self.startDate       = startDate
-        self.endDate         = endDate
-        self.holdingPeriod   = holdingPeriod
-        self.longOnly        = longOnly
-        self.fundList        = fundList
-        self.currentPosition = currentPosition
-        #self.cvxPosition     = cvx.Variable(len(currentPosition))
-        self.tsLoader        = { }
-        self.fundTxnCosts    = []
-        self._loadFund()
-        self._populateRet()
+    # def _loadFund( self ):
+    #     txnCostLoader = FundTransactionCostLoader()
+    #     availableFundList = []
+    #     for fund in self.fundList:
+    #         try:
+    #             logging.debug( "%s:Loading time series...", fund )
+    #             self.tsLoader[fund] = fundTSLoaderResolver(fund)
+    #             self.tsLoader[fund].load( self.startDate - pd.offsets.BDay( self.holdingPeriod ), self.endDate )
+    #             if not self.tsLoader[fund].IsAvailableForOptimisation:
+    #                 del self.tsLoader[fund]
+    #                 raise RuntimeError( "Fund %s is not available for optimisation" % fund  )
+    #             self.fundTxnCosts.append( txnCostLoader.getTxnCost(fund) )
+    #             availableFundList.append( fund )
+    #             logging.debug( "%s:Successfully loaded fund data.", fund )
+    #         except Exception as e:
+    #             logging.warn( "%s:Cannot read fund data. Reason: %s", fund, e )
 
-    def _loadFund( self ):
-        txnCostLoader = FundTransactionCostLoader()
-        availableFundList = []
-        for fund in self.fundList:
-            try:
-                logging.debug( "%s:Loading time series...", fund )
-                self.tsLoader[fund] = fundTSLoaderResolver(fund)
-                self.tsLoader[fund].load( self.startDate - pd.Timedelta( days = self.holdingPeriod ), self.endDate )
-                if not self.tsLoader[fund].IsAvailableForOptimisation:
-                    del self.tsLoader[fund]
-                    raise RuntimeError( "Fund %s is not available for optimisation" % fund  )
-                self.fundTxnCosts.append( txnCostLoader.getTxnCost(fund) )
-                availableFundList.append( fund )
-                logging.debug( "%s:Successfully loaded fund data.", fund )
-            except Exception as e:
-                logging.warn( "%s:Cannot read fund data. Reason: %s", fund, e )
+    #     logging.info( "FundOptimiser._loadFund:Read successfully %d funds data. Total fund list size: %d",  len( self.tsLoader ), len( self.fundList ) )
+    #     self.fundList        = availableFundList
+    #     self.currentPosition = self.currentPosition[ availableFundList ].values
+    #     self.cvxPosition     = cvx.Variable( self.currentPosition.shape )
 
-        logging.info( "FundOptimiser._loadFund:Read successfully %d funds data. Total fund list size: %d",  len( self.tsLoader ), len( self.fundList ) )
-        self.fundList        = availableFundList
-        availablePosition    = self.currentPosition[ availableFundList ]
-        self.currentPosition = np.matrix(availablePosition).T
-        self.cvxPosition      = cvx.Variable( len( self.currentPosition ) )
+    # def _populateRet(self):
+    #     retTS = []
+    #     for fund in self.fundList:
+    #         try:
+    #             retTS.append(self.tsLoader[fund].getReturnTS(self.holdingPeriod))
+    #         except Exception as e:
+    #             logging.warn( "Cannot calculate returns for %s, Reason: %s", fund, e )
 
-    def _populateRet(self):
-        retTS = []
-        for fund in self.fundList:
-            try:
-                retTS.append(self.tsLoader[fund].getReturnTS(self.startDate, self.endDate, self.holdingPeriod))
-            except Exception as e:
-                logging.warn( "Cannot calculate returns for %s, Reason: %s", fund, e )
+    #     self.Ret = np.array(retTS)
+    #     logging.info( "FundOptimiser._populateRet:Calculated returns for %d funds and %d dates",  self.Ret.shape[0], self.Ret.shape[1])
 
-        self.Ret = np.matrix(retTS)
-        logging.info( "FundOptimiser._populateRet:Calculated returns for %d funds and %d dates",  self.Ret.shape[0], self.Ret.shape[1])
-
-    def _genConstraints(self):
+    def _genConstraints(self, currentPosition, **kwargs):
         # Self-financing constrains
-        self.cvxConstraints = [ cvx.sum(self.cvxPosition)
-                                + sum( [ txnCost(self.cvxPosition[ii]) for ii, txnCost in enumerate(self.fundTxnCosts) ] ) <= 0.0 ]
+        self.cvxConstraints = [ cvx.sum(self.cvxTrades)
+                                + sum( [ ftc.getTxnCost(fund)(self.cvxTrades[ii]) for ii, fund in enumerate(self.fundList) ] ) <= 0.0 ]
         if self.longOnly:
-            self.cvxConstraints += [ self.currentPosition + self.cvxPosition >= 0.0 ]
+            self.cvxConstraints += [ currentPosition + self.cvxTrades >= 0.0 ]
 
-    def _genProblem(self):
-        self.cvxProblem = cvx.Problem(self.cvxObjectiveFunc, self.cvxConstraints)
+    def _genProblem(self, currentPosition, **kwargs):
+        self._genConstraints( currentPosition, **kwargs)
+        self._genObjectiveFunc( currentPosition, **kwargs)
+        self.cvxProblem = cvx.Problem(self.cvxObjective, self.cvxConstraints)
 
     @abstractmethod
-    def _genObjectiveFunc(self):
+    def _genObjectiveFunc(self, currentPosition, **kwargs):
         pass
 
     def _interpretResult(self, optPos):
-        sellPos = optPos < -0.01
-        buyPos  = optPos > 0.01
+        sellPos = optPos < -1.
+        buyPos  = optPos > 1.
         resultStr = ''
         fundArray = np.array( self.fundList, dtype = str )
         for sellFund, sellQuant in zip(fundArray[sellPos], optPos[sellPos]):
@@ -102,18 +88,30 @@ class FundOptimizer(object):
 
         return resultStr
 
-    def getOptimalPosition(self, verbose = False):
-        self._genObjectiveFunc()
-        self._genConstraints()
-        self._genProblem()
+    def getOptimalPosition(self, currentPosition, verbose = False, **kwargs):
+        """Get optimal trades at given current position
+        
+        Arguments:
+            currentPosition {pd.Series} -- Current fund position with index being fund codes and values being invested notional 
+            current fund position has to be the same universe as the returns, extra investment will be discarded.
+        
+        Keyword Arguments:
+            verbose {bool} -- Whether to print the optimization steps and final trade suggestions (default: {False})
+        
+        Returns:
+            np.array -- Optimal trades to execute
+        """
+        currentPosition = currentPosition.reindex(self.fundList).fillna(0.0).values
+        self.cvxTrades = cvx.Variable( currentPosition.shape )
+        self._genProblem(currentPosition, **kwargs)
         try:
-            self.cvxProblem.solve(verbose = verbose)
+            self.cvxProblem.solve(verbose = verbose, solver = cvx.ECOS)
         except:
-            optPos = np.zeros_like(self.currentPosition)
+            optPos = np.zeros_like(currentPosition)
         if self.cvxProblem.status in [ cvx.OPTIMAL, cvx.OPTIMAL_INACCURATE ]:
-            optPos = np.round(np.squeeze(np.array(self.cvxPosition.value)), decimals = 2)
+            optPos = np.round(np.squeeze(np.array(self.cvxTrades.value)), decimals = 2)
         else:
-            optPos = np.zeros_like(self.currentPosition)
+            optPos = np.zeros_like(currentPosition)
 
         if verbose:
             if self.cvxProblem.status in [ cvx.OPTIMAL, cvx.OPTIMAL_INACCURATE ]:
@@ -124,16 +122,20 @@ class FundOptimizer(object):
         return optPos
 
 
-class FundTargetRetOptimiser(FundOptimizer):
+class FundTargetRetOptimiser(BaseFundOptimizer):
 
     def __init__(self, targetRet = 0.01, *args, **kwargs):
         super(FundTargetRetOptimiser, self).__init__( *args, **kwargs )
         self.targetRet = targetRet
 
-    def _genConstraints(self):
-        super(FundTargetRetOptimiser, self)._genConstraints()
-        Mu = np.matrix(np.mean(self.Ret, axis=1))
-        self.cvxConstraints += [ Mu.T*( self.currentPosition + self.cvxPosition ) >= self.targetRet*np.sum( self.currentPosition ) ]
+    def _genConstraints(self, currentPosition, lookbackPeriod=None):
+        super(FundTargetRetOptimiser, self)._genConstraints(currentPosition)
+        if lookbackPeriod is not None:
+            returns = self.returns.loc[lookbackPeriod].fillna(0.0).values
+        else:
+            returns = self.returns.fillna(0.0).values
+        Mu = np.mean(returns, axis = 0)
+        self.cvxConstraints += [ Mu.T*( currentPosition + self.cvxTrades ) >= self.targetRet*np.sum( currentPosition ) ]
 
 class FundTargetRetMinCVaROptimiser(FundTargetRetOptimiser):
 
@@ -142,7 +144,25 @@ class FundTargetRetMinCVaROptimiser(FundTargetRetOptimiser):
         self.cvarConf = cvarConf
         self.aux      = cvx.Variable()
 
-    def _genObjectiveFunc(self):
-        _, T = self.Ret.shape
-        CVaR = self.aux + cvx.sum( cvx.pos( - (self.currentPosition+self.cvxPosition).T*self.Ret - self.aux ) )/T/(1-self.cvarConf)
-        self.cvxObjectiveFunc = cvx.Minimize( CVaR )
+    def _genObjectiveFunc(self, currentPosition, lookbackPeriod=None):
+        if lookbackPeriod is not None:
+            returns = self.returns.loc[lookbackPeriod].fillna(0.0).values
+        else:
+            returns = self.returns.fillna(0.0).values
+        T, _ = returns.shape
+        CVaR = self.aux + cvx.sum( cvx.pos( - (currentPosition+self.cvxTrades)*returns.T - self.aux ) )/T/(1-self.cvarConf)
+        self.cvxObjective =  cvx.Minimize( CVaR )
+
+class FundTargetRetMinVarianceOptimiser(FundTargetRetOptimiser):
+
+    def __init__(self, *args, **kwargs):
+        super(FundTargetRetMinVarianceOptimiser, self).__init__( *args, **kwargs )
+
+    def _genObjectiveFunc(self, currentPosition, lookbackPeriod=None):
+        if lookbackPeriod is not None:
+            returns = self.returns.loc[lookbackPeriod]
+        else:
+            returns = self.returns
+        sigma = returns.cov().values
+        variance = cvx.quad_form( currentPosition+self.cvxTrades, sigma )
+        self.cvxObjective = cvx.Minimize( variance )

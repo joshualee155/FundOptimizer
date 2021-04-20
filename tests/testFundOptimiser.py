@@ -16,7 +16,7 @@ class Test_testFundOptimiser(unittest.TestCase):
         fundList  = fundList[:10]
         currentPosition = [0.0]*len(fundList)
         currentPosition[0] = 50000.0
-        kwargs = { 'prefix' : 'temp', 'index_col' : 1, 'date_cols' : ['Date'] }
+        # kwargs = { 'prefix' : 'temp', 'index_col' : 1, 'date_cols' : ['Date'] }
         optimiser = FundTargetRetMinCVaROptimiser(
                                     targetRet       = 0.005,
                                     startDate       = startDate,
@@ -25,7 +25,7 @@ class Test_testFundOptimiser(unittest.TestCase):
                                     longOnly        = True,
                                     fundList        = fundList,
                                     currentPosition = currentPosition, 
-                                    **kwargs)
+                                    )
         optMovement = optimiser.getOptimalPosition(verbose = True)
         newPosition = np.array( currentPosition ) + optMovement
 

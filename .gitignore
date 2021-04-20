@@ -5,6 +5,14 @@ __pycache__/
 
 # Data CSV files
 temp/
+temp2/
+temp3/
+temp4/
+temp5/
+temp6/
+temp7/
+
+*.pkl
 
 # VS code configuration files
 .vscode/

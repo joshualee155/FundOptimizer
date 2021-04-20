@@ -2,6 +2,8 @@ import os.path
 import pandas as pd
 import cvxpy as cvx
 
+__all__ = ['fundTransactionCost']
+
 DEFAULT_BUYCOST  = 0.12
 DEFAULT_SELLCOST = 0.5
 NORMAL_FACTOR    = 100.
@@ -9,7 +11,6 @@ NORMAL_FACTOR    = 100.
 defaultTxnCost = lambda _x : cvx.scalene(_x, DEFAULT_BUYCOST/NORMAL_FACTOR, DEFAULT_SELLCOST/NORMAL_FACTOR)
 
 class FundTransactionCostLoader(object):
-
 
     def __init__(self, prefix = 'refData'):
         
@@ -29,8 +30,5 @@ class FundTransactionCostLoader(object):
         else:
             return cost
 
-if __name__ == "__main__":
-    txnCostLoader = FundTransactionCostLoader()
-    fundcode  = '000198'
-    x = cvx.Variable()
-    print( (txnCostLoader.getTxnCost(fundcode)(x)) <= 0 )
+# Only export this
+fundTransactionCost = FundTransactionCostLoader()

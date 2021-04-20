@@ -4,13 +4,38 @@ import numpy as np
 from   datetime import date
 import multiprocessing as mp
 import os
+import time
 
 url_of  = 'http://stock.finance.sina.com.cn/fundInfo/api/openapi.php/CaihuiFundInfoService.getNav'
 url_mmf = 'http://stock.finance.sina.com.cn/fundInfo/api/openapi.php/CaihuiFundInfoService.getNavCur'
-endDate   = '%s' % date.today()
-startDate = '2014-01-01'
 
-def download_of( fundCode ):
+folder = './temp'
+
+os.makedirs(folder, exist_ok=True)
+
+def _try_request( url, data, max_tries = 3, pause = 0.01 ):
+
+    res = None
+
+    n_tries = 1
+    while True:
+        try:
+            res = requests.post( url, data = data )
+            break
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except:
+            time.sleep(pause)
+            if n_tries < max_tries:
+                print( f"Trying {n_tries}-th time." )
+                n_tries += 1
+            else:
+                raise
+
+    return res
+
+
+def download_of( fundCode, startDate, endDate ):
     """
     Download the daily NAV for Open Ended Fund. 
 
@@ -21,8 +46,8 @@ def download_of( fundCode ):
 
     #if os.path.exists( './temp/%s.csv' % fundCode ):
     #    return 1
-    requestDates = pd.date_range( startDate, endDate )
-    res = requests.post( url_of, data = { 'symbol'   : fundCode, 
+    requestDates = pd.bdate_range( startDate, endDate )
+    res = _try_request( url_of, data = { 'symbol'   : fundCode, 
                                        'datefrom' : startDate, 
                                        'dateto'   : endDate, 
                                        } )
@@ -37,31 +62,32 @@ def download_of( fundCode ):
         currLen  = len( data )
 
         pageNum  = 2
-        while currLen < totalLen:
-            res = requests.post( url_of, data = { 'symbol' : fundCode, 
+        newLen = currLen
+        while currLen < totalLen and newLen > 0:
+            res = _try_request( url_of, data = { 'symbol' : fundCode, 
                                                'datefrom' : startDate, 
                                                'dateto' : endDate, 
                                                'page' : str( pageNum )
                                                } )
             dataJson  = res.json().get( 'result' ).get( 'data' )
             data     += dataJson.get( 'data' )
-
+            newLen    = len( dataJson.get( 'data' ) )
             currLen   = len(data)
             pageNum  += 1
 
-        dataDf = pd.DataFrame.from_dict( data ).astype( { 'fbrq' : pd.Timestamp, 'jjjz' : float, 'ljjz' : float } )
+        dataDf = pd.DataFrame( data ).astype( { 'jjjz' : float, 'ljjz' : float } )
         dataDf.rename( columns = { 'fbrq' : 'Date', 'jjjz' : 'NAV', 'ljjz' : 'ACC_NAV' }, inplace = True )
-        dataDf[ 'Date' ] = dataDf[ 'Date' ].apply( pd.Timestamp )
+        dataDf[ 'Date' ] = pd.to_datetime( dataDf[ 'Date' ] )
         dataDf.set_index( 'Date', inplace = True )
         dataDf = dataDf[ ~dataDf.index.duplicated() ]
         dataDf.sort_index( inplace = True )
         dataDf = dataDf.reindex( requestDates, method = 'ffill' )
         dataDf.dropna( inplace = True )
-        dataDf.to_csv( './temp/%s.csv' % fundCode )
+        dataDf.to_csv( folder + '/%s.csv' % fundCode )
         return fundCode
     return ""
 
-def download_mmf( fundCode ):
+def download_mmf( fundCode, startDate, endDate ):
     """
     Download the daily profit and weekly return for Money Market Fund. 
 
@@ -70,10 +96,10 @@ def download_mmf( fundCode ):
         fundCode: str, 6-digit fund code
     """
 
-    res = requests.post( url_mmf, data = { 'symbol'   : fundCode, 
-                                       'datefrom' : startDate, 
-                                       'dateto'   : endDate, 
-                                       } )
+    res = _try_request( url_mmf, data = { 'symbol'   : fundCode, 
+                                        'datefrom' : startDate, 
+                                        'dateto'   : endDate, 
+                                        } )
     if res.ok:
         print( "Start downloading %s...." % fundCode )
         dataJson = res.json().get( 'result' ).get( 'data' )
@@ -81,29 +107,31 @@ def download_mmf( fundCode ):
         if totalLen == 0:
             print( "No data found, skip" )
             return 0
-        data     = dataJson.get( 'data' ).values()
+        data     = list( dataJson.get( 'data' ).values() )
         currLen  = len( data )
 
         pageNum  = 2
-        while currLen < totalLen:
-            res = requests.post( url_mmf, data = { 'symbol' : fundCode, 
-                                               'datefrom' : startDate, 
-                                               'dateto' : endDate, 
-                                               'page' : str( pageNum )
-                                               } )
+        newLen = currLen
+        while currLen < totalLen and newLen > 0:
+            res = _try_request( url_mmf, data = { 'symbol' : fundCode, 
+                                                    'datefrom' : startDate, 
+                                                    'dateto' : endDate, 
+                                                    'page' : str( pageNum )
+                                                    } )
             dataJson  = res.json().get( 'result' ).get( 'data' )
             dataSlice = dataJson.get('data')
             if dataSlice is not None:
                 if isinstance( dataSlice, list ):
                     data += dataSlice
                 else:
-                    data += dataSlice.values()
+                    data += list( dataSlice.values() )
                 currLen   = len(data)
+                newLen = len( dataSlice )
                 pageNum  += 1
             else:
                 break
 
-        dataDf = pd.DataFrame.from_dict( data ).astype( { 'fbrq' : pd.Timestamp, 'nhsyl' : float, 'dwsy' : float } )
+        dataDf = pd.DataFrame.from_dict( data ).astype( {'nhsyl' : float, 'dwsy' : float } )
         dataDf.rename( columns = { 'fbrq' : 'Date', 'nhsyl' : 'weeklyReturn', 'dwsy' : 'dailyProfit' }, inplace = True )
         dataDf.drop( columns = ["NAV_CUR1"], inplace = True )
         dataDf[ 'Date' ] = pd.to_datetime( dataDf[ 'Date' ] )
@@ -111,22 +139,38 @@ def download_mmf( fundCode ):
         dataDf.set_index( 'Date', inplace = True )
         dataDf.sort_index( inplace = True )
 
-        dataDf.to_csv( './temp/%s.csv' % fundCode )
+        dataDf.to_csv( folder + '/%s.csv' % fundCode )
         return 1
     return 0
 
 
 if __name__ == '__main__':
 
-    fundList, fundTypes  = np.genfromtxt( './refData/fund_list.csv', dtype = str, delimiter = ',', unpack = True  )
-    fundList  = [ fund.zfill(6) for fund, fundType in zip(fundList, fundTypes) if fundType  == 'MMF' ]
+    from functools import partial
+    # import os
+    # os.makedirs(folder)
 
-    fundAvail = [filename.split('.')[0] for filename in os.listdir( './temp/' ) ]
+    fundList, fundTypes  = np.genfromtxt( './refData/fund_list.csv', dtype = str, delimiter = ',', unpack = True  )
+    fundList  = [ fund.zfill(6) for fund, fundType in zip(fundList, fundTypes) if fundType == 'MMF' ]
+
+    endDate   = '%s' % date.today()
+    startDate = '2021-02-27'
+
+    # fundAvail = [filename.split('.')[0] for filename in os.listdir( './temp/' ) ]
     
-    fundList  = list( set( fundList ).difference( fundAvail ) )
-    fundList = [ '000198' ]
-    #pool = mp.Pool( 16 )
-    #r = pool.map_async( download_mmf, fundList )
-    #r.wait()
-    download_mmf( fundList[0] )
-    print( "Done!" )
+    # fundList  = list( set( fundList ).difference( fundAvail ) )
+    # fundList = [ '000198' ]
+    # pool = mp.Pool( 8 )
+    # to_apply = partial( download_of, startDate = startDate, endDate = endDate )
+    # r = pool.map( to_apply , fundList )
+    
+    for fund in fundList:
+        time.sleep(0.01)
+        download_mmf( fund, startDate, endDate )
+    print("Done!")
+
+    # download_of( fundList[0] )
+
+    # for fund in fundList:
+    #     download_mmf( fund )
+    # print( "Done!" )

@@ -2,22 +2,14 @@ import requests
 import pandas as pd
 import os.path
 import logging as logger
+from arctic import Arctic
 
 url_mmf = 'http://stock.finance.sina.com.cn/fundInfo/api/openapi.php/CaihuiFundInfoService.getNavCur'
 
+a = Arctic( 'localhost' )
+lib = a['fund']
+
 class MoneyMarketFundTSLoaderSinaMixin( object ):
-
-    def getLocalData( self ):
-        """
-        Read from local cache, return the dataframe and available dates in the cache
-        """
-
-        localData = pd.read_csv( os.path.join(self.localPrefix, '%s.csv' % self.fundCode), 
-                                index_col = 0, parse_dates = True,
-                                )
-        dates     = localData.index.tolist()
-
-        return localData, dates
 
     def writeLocalData( self, dataDf ):
         """
