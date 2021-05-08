@@ -135,7 +135,7 @@ class FundTargetRetOptimiser(BaseFundOptimizer):
         else:
             returns = self.returns.fillna(0.0).values
         Mu = np.mean(returns, axis = 0)
-        self.cvxConstraints += [ Mu.T*( currentPosition + self.cvxTrades ) >= self.targetRet*np.sum( currentPosition ) ]
+        self.cvxConstraints += [ Mu.T@( currentPosition + self.cvxTrades ) >= self.targetRet*np.sum( currentPosition ) ]
 
 class FundTargetRetMinCVaROptimiser(FundTargetRetOptimiser):
 
@@ -150,7 +150,7 @@ class FundTargetRetMinCVaROptimiser(FundTargetRetOptimiser):
         else:
             returns = self.returns.fillna(0.0).values
         T, _ = returns.shape
-        CVaR = self.aux + cvx.sum( cvx.pos( - (currentPosition+self.cvxTrades)*returns.T - self.aux ) )/T/(1-self.cvarConf)
+        CVaR = self.aux + cvx.sum( cvx.pos( - (currentPosition+self.cvxTrades)@returns.T - self.aux ) )/T/(1-self.cvarConf)
         self.cvxObjective =  cvx.Minimize( CVaR )
 
 class FundTargetRetMinVarianceOptimiser(FundTargetRetOptimiser):

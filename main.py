@@ -15,7 +15,7 @@ if __name__ == "__main__":
     logging.basicConfig( level = logging.INFO )
 
     start = dt.date(2014, 3, 23)
-    end   = dt.date(2021, 4, 1)
+    end   = dt.date(2021, 4, 22)
     holding = 20
     
     funds = lib.list_symbols()
@@ -28,11 +28,11 @@ if __name__ == "__main__":
 
     fund_returns = pd.read_pickle('./{}_{}_{}.pkl'.format(start, end, holding))
 
-    lookback = pd.bdate_range('2020-10-01', '2021-04-01')
+    lookback = pd.bdate_range('2020-10-22', '2021-04-22')
 
     opt = FundTargetRetMinCVaROptimiser(
     # opt = FundTargetRetMinVarianceOptimiser(
-        targetRet=0.12, 
+        targetRet=0.14, 
         returns=fund_returns)
 
     currentPosition=pd.Series(0.0, index=funds)

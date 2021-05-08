@@ -151,10 +151,10 @@ if __name__ == '__main__':
     # os.makedirs(folder)
 
     fundList, fundTypes  = np.genfromtxt( './refData/fund_list.csv', dtype = str, delimiter = ',', unpack = True  )
-    fundList  = [ fund.zfill(6) for fund, fundType in zip(fundList, fundTypes) if fundType == 'MMF' ]
+    # fundList  = [ fund.zfill(6) for fund, fundType in zip(fundList, fundTypes) if fundType != 'MMF' ]
 
     endDate   = '%s' % date.today()
-    startDate = '2021-02-27'
+    startDate = '2021-04-02'
 
     # fundAvail = [filename.split('.')[0] for filename in os.listdir( './temp/' ) ]
     
@@ -164,9 +164,14 @@ if __name__ == '__main__':
     # to_apply = partial( download_of, startDate = startDate, endDate = endDate )
     # r = pool.map( to_apply , fundList )
     
-    for fund in fundList:
+    for fund, fundType in zip(fundList, fundTypes):
+        fundCode = fund.zfill(6)
         time.sleep(0.01)
-        download_mmf( fund, startDate, endDate )
+        if fundType == 'MMF':
+            download_fn = download_mmf
+        else:
+            download_fn = download_of
+        download_fn( fundCode, startDate, endDate )
     print("Done!")
 
     # download_of( fundList[0] )
