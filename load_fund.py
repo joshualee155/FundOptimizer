@@ -1,40 +1,26 @@
-from   fundopt.fundopt import FundTargetRetMinCVaROptimiser
-from   fundopt.fundtsloader import fundTSLoaderResolver
-import multiprocessing as mp
-from functools import partial
+from   fundopt.fundtsloader import load_funds
 import pandas   as pd
 import numpy    as np
 import datetime as dt
 import logging
+from arctic import CHUNK_STORE, Arctic
 
-def _load_data(fund, start, end):
-    logging.debug( "%s:Loading time series...", fund )
-    try:
-        tsLoader = fundTSLoaderResolver(fund)
-        tsLoader.load( start, end )
-        ret = tsLoader.getReturnTS()
-        if ret is not None:
-            ret.name = fund
-            return ret
-    except Exception as e:
-        logging.warning( "%s:Cannot load time series. Error: %s", fund, e )
+a = Arctic('localhost')
+a.initialize_library('fund', lib_type=CHUNK_STORE)
+
+lib = a['fund']
 
 if __name__ == "__main__":
     logging.basicConfig( level = logging.INFO )
 
-    startDate = dt.date(2019, 9, 23)
-    endDate   = dt.date(2020, 3, 24)
+    start = dt.date(2014, 3, 23)
+    end   = dt.date(2021, 4, 22)
+    holding = 20
     
-    fundList  = np.genfromtxt( 'refData/AvailableFundList.txt', dtype = str ).tolist()
-    fundList.remove('003254')
-    fundList.remove('003255')
+    funds = lib.list_symbols()
+    funds.remove('003254') # data issue
+    funds.remove('003255') # data issue
+    funds.remove('001481') # QDII funds, not sold on Ant Financial
 
-    # to_map = partial( _load_data, start = startDate, end = endDate )
-    # pool = mp.Pool(8)
-    # res = pool.map( to_map, fundList[:100] )
-    # pool.close()
-    # pool.join()
-
-    res = _load_data( '165705', startDate, endDate )
-    df = pd.concat(res, axis=1)
-    print( res )
+    fund_returns=load_funds(funds, start, end, holding)
+    fund_returns.to_pickle('./{}_{}_{}.pkl'.format(start, end, holding))

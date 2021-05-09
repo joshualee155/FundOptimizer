@@ -3,8 +3,8 @@ import cvxpy as cvx
 import pandas as pd
 import datetime as dt
 from abc import ABCMeta, abstractmethod
-from fundopt.fundtsloader import fundTSLoaderResolver
-from fundopt.fundtcloader import fundTransactionCost as ftc
+from .fundtsloader import fundTSLoaderResolver
+from .fundtcloader import fundTransactionCost as ftc
 import os
 import logging
 
