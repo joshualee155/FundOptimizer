@@ -3,7 +3,6 @@ import cvxpy as cvx
 import pandas as pd
 import datetime as dt
 from abc import ABCMeta, abstractmethod
-from .fundtsloader import fundTSLoaderResolver
 from .fundtcloader import fundTransactionCost as ftc
 import os
 import logging
@@ -26,39 +25,6 @@ class BaseFundOptimizer(object):
         self.returns = returns
         self.fundList = returns.columns
         self.longOnly = longOnly
-
-    # def _loadFund( self ):
-    #     txnCostLoader = FundTransactionCostLoader()
-    #     availableFundList = []
-    #     for fund in self.fundList:
-    #         try:
-    #             logging.debug( "%s:Loading time series...", fund )
-    #             self.tsLoader[fund] = fundTSLoaderResolver(fund)
-    #             self.tsLoader[fund].load( self.startDate - pd.offsets.BDay( self.holdingPeriod ), self.endDate )
-    #             if not self.tsLoader[fund].IsAvailableForOptimisation:
-    #                 del self.tsLoader[fund]
-    #                 raise RuntimeError( "Fund %s is not available for optimisation" % fund  )
-    #             self.fundTxnCosts.append( txnCostLoader.getTxnCost(fund) )
-    #             availableFundList.append( fund )
-    #             logging.debug( "%s:Successfully loaded fund data.", fund )
-    #         except Exception as e:
-    #             logging.warn( "%s:Cannot read fund data. Reason: %s", fund, e )
-
-    #     logging.info( "FundOptimiser._loadFund:Read successfully %d funds data. Total fund list size: %d",  len( self.tsLoader ), len( self.fundList ) )
-    #     self.fundList        = availableFundList
-    #     self.currentPosition = self.currentPosition[ availableFundList ].values
-    #     self.cvxPosition     = cvx.Variable( self.currentPosition.shape )
-
-    # def _populateRet(self):
-    #     retTS = []
-    #     for fund in self.fundList:
-    #         try:
-    #             retTS.append(self.tsLoader[fund].getReturnTS(self.holdingPeriod))
-    #         except Exception as e:
-    #             logging.warn( "Cannot calculate returns for %s, Reason: %s", fund, e )
-
-    #     self.Ret = np.array(retTS)
-    #     logging.info( "FundOptimiser._populateRet:Calculated returns for %d funds and %d dates",  self.Ret.shape[0], self.Ret.shape[1])
 
     def _genConstraints(self, currentPosition, **kwargs):
         # Self-financing constrains
