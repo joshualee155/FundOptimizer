@@ -154,7 +154,7 @@ if __name__ == '__main__':
     # fundList  = [ fund.zfill(6) for fund, fundType in zip(fundList, fundTypes) if fundType != 'MMF' ]
 
     endDate   = '%s' % date.today()
-    startDate = '2021-04-02'
+    startDate = '2020-01-01'
 
     # fundAvail = [filename.split('.')[0] for filename in os.listdir( './temp/' ) ]
     

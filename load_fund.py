@@ -13,8 +13,8 @@ lib = a['fund']
 if __name__ == "__main__":
     logging.basicConfig( level = logging.INFO )
 
-    start = dt.date(2014, 3, 23)
-    end   = dt.date(2021, 4, 22)
+    start = dt.date(2020, 1, 1)
+    end   = dt.date(2021, 5, 7)
     holding = 20
     
     funds = lib.list_symbols()

@@ -12,6 +12,7 @@ from arctic import Arctic
 a = Arctic( 'localhost' )
 lib = a['fund']
 
+
 class FundTimeSeriesLoader(object):
 
 
@@ -33,17 +34,8 @@ class FundTimeSeriesLoader(object):
 
     def getData( self, startDate, endDate ):
 
-        requestDates = pd.bdate_range( startDate, endDate )
+        requestDates = self.generate_request_dates(startDate, endDate)
         cachedDf, cachedDates = self.getLocalData( requestDates )
-
-        # missingDates     = list( set( requestDates ).difference( cachedDates ) )
-        # missingDfFromWeb = self.getDataFromWeb( missingDates )
-
-        # aggregatedDf = pd.concat( ( cachedDf, missingDfFromWeb ) )
-        # aggregatedDf = aggregatedDf[ ~aggregatedDf.index.duplicated() ]
-        # aggregatedDf.sort_index( inplace = True )
-        # if not missingDfFromWeb.empty:
-        #     self.writeLocalData( aggregatedDf )
 
         self.IsAvailableForOptimisation = (len( cachedDates ) / len( requestDates )) > 0.9
 
@@ -52,6 +44,10 @@ class FundTimeSeriesLoader(object):
 
         return requestDf
 
+    def generate_request_dates(self, startDate, endDate):
+        requestDates = pd.bdate_range( startDate, endDate )
+        return requestDates
+
     def _postProcess(self):
         # if 'Unnamed: 0' in self._rawData:
         #     self._rawData.drop( columns = [ 'Unnamed: 0' ], inplace = True )
@@ -59,7 +55,11 @@ class FundTimeSeriesLoader(object):
         self._rawData.sort_index( inplace = True )
 
     @abstractmethod
-    def getReturnTS(self):
+    def getReturnTS(self, start, end, offset):
+        pass
+
+    @abstractmethod
+    def getReturnByDate(self, start, end):
         pass
 
     def getLocalData(self, dates):
@@ -67,9 +67,6 @@ class FundTimeSeriesLoader(object):
         Read from local cache, return the dataframe and available dates in the cache
         """
 
-        # localData = pd.read_csv( os.path.join(self.localPrefix, '%s.csv' % self.fundCode), 
-        #                         index_col = 0, parse_dates = True,
-        #                         )
         localData = lib.read( self.fundCode, chunk_range = dates)
         localData = localData[ ~localData.index.duplicated() ]
         dates     = localData.index.tolist()
@@ -83,45 +80,81 @@ class FundTimeSeriesLoader(object):
     
 
 class MMFundTimeSeriesLoader(FundTimeSeriesLoader):
-    
-    
-    def __init__( self, fundCode, prefix = 'temp' ):
-        super(MMFundTimeSeriesLoader, self).__init__(fundCode)
-        self.localPrefix = prefix
-
-    def getReturnByDate( self, StartDate, EndDate ):
         
-        if StartDate not in self._rawData or EndDate not in self._rawData:
-            self.load( StartDate, EndDate )
-        return sum( self._rawData['dailyProfit'][StartDate:EndDate] )/10000.
+    def generate_request_dates(self, startDate, endDate):
+        requestDates = pd.date_range( startDate, endDate )
+        return requestDates
 
-    def getReturnTS( self, offset = 1 ):
+    def getReturnByDate( self, start, end ):
+        """get single return from start to end
+
+        Args:
+            start ([type]): start date, assumption: trading day
+            end ([type]): end date: assumption: trading day
+
+        Returns:
+            float: return in decimal, e.g., 
+                   if the daily profit (per 10000 units) is 1.5 flat, 
+                   then return from day 1 to day 10 will be
+                   1.5 x 10 / 10000 = 0.0015
+        """
+        if start > self._rawData.index.min() or end < self._rawData.index.max():
+            self.load( start, end )
+        return sum( self._rawData['dailyProfit'][start:end] )/10000.
+
+    def getReturnTS( self, start, end, offset = 1 ):
+        """Generate (overlapping) returns
+
+        Args:
+            start (datetime.date): start date, assumption: trading day
+            end (datetime.date): end date, assumption: trading day
+            offset (int, optional): holding period. Defaults to 1.
+
+        Returns:
+            pd.Series: return time series
+        """
+        if start > self._rawData.index.min() or end < self._rawData.index.max():
+            self.load( start, end )
+        
         if self.IsAvailableForTrading:
-            return self._rawData['dailyProfit'] \
-                        .rolling(window = offset, center = False).sum()/10000.
+            daily = self._rawData['dailyProfit'].loc[start:end]
+        
+            starts = pd.bdate_range(start, end)
+            ends = starts + pd.offsets.BDay(offset)
+
+            return_calc = pd.DataFrame()
+            return_calc['start'] = starts
+            return_calc['end'] = ends
+            return_calc = return_calc[return_calc['end'].dt.date<=end]
+
+            results = []
+            for row in return_calc.itertuples(index=False):
+                results.append( daily.loc[row.start:row.end].sum()/10000. )
+
+            return_calc['return'] = results
+            return return_calc.set_index('end')['return'].reindex(starts)
         else:
             return None
 
 
 class OpenFundTimeSeriesLoader(FundTimeSeriesLoader):
     
-    def __init__(self, fundCode, prefix = 'temp'):
-        super(OpenFundTimeSeriesLoader, self).__init__(fundCode)
-        self.localPrefix = prefix
-        
-    def getReturnByDate( self, StartDate = None, EndDate = None ):
-        if StartDate not in self._rawData or EndDate not in self._rawData:
-            self.load( StartDate, EndDate )
-        startNAV, startAccNAV = self._rawData[ ['NAV', 'ACC_NAV'] ].loc[StartDate]
-        endAccNAV             = self._rawData[ 'ACC_NAV' ][EndDate]
+    def getReturnByDate( self, start, end ):
+        if start > self._rawData.index.min() or end < self._rawData.index.max():
+            self.load( start, end )
+        startNAV, startAccNAV = self._rawData[ ['NAV', 'ACC_NAV'] ].loc[start]
+        endAccNAV             = self._rawData[ 'ACC_NAV' ][end]
         
         return (endAccNAV - startAccNAV)/startNAV
     
-    def getReturnTS( self, offset = 1  ):
+    def getReturnTS( self, start, end, offset = 1  ):
+        if start > self._rawData.index.min() or end < self._rawData.index.max():
+            self.load( start, end )
+        nav = self._rawData.loc[start:end]
         if self.IsAvailableForTrading: 
-            startNAV    = self._rawData[ 'NAV' ].shift(offset)
-            startAccNAV = self._rawData[ 'ACC_NAV' ].shift(offset)
-            endAccNAV   = self._rawData[ 'ACC_NAV' ]
+            startNAV    = nav[ 'NAV' ].shift(offset)
+            startAccNAV = nav[ 'ACC_NAV' ].shift(offset)
+            endAccNAV   = nav[ 'ACC_NAV' ]
         
             return (endAccNAV - startAccNAV)/startNAV
         else:
@@ -144,7 +177,7 @@ class OpenFundTimeSeriesLoader(FundTimeSeriesLoader):
                                                     + self._rawData['ACC_NAV'].iloc[ind-1]
         return
 
-def fundTSLoaderResolver( fundCode ):
+def getTSLoader( fundCode ):
     fundType = getFundType(fundCode)
     if fundType == FundType.MMF:
         return MMFundTimeSeriesLoader(fundCode)
@@ -154,9 +187,9 @@ def fundTSLoaderResolver( fundCode ):
 def _load_data(fund, start, end, holdingPeriod=1):
     logging.debug( "%s:Loading time series...", fund )
     try:
-        tsLoader = fundTSLoaderResolver(fund)
+        tsLoader = getTSLoader(fund)
         tsLoader.load( start, end )
-        ret = tsLoader.getReturnTS(holdingPeriod)
+        ret = tsLoader.getReturnTS(start, end, holdingPeriod)
         if ret is not None:
             ret.name = fund
             return ret
@@ -174,24 +207,3 @@ def load_funds(funds, start, end, holdingPeriod=1):
 
     df = pd.concat(res, axis=1)
     return df.dropna(how='all')
-
-if __name__ == '__main__':
-    import matplotlib.pyplot as plt
-
-    StartDate       = dt.date(2018, 10, 19)
-    EndDate         = dt.date(2019, 10, 22)
-    HoldingPeriod   = 30
-    DateIndex       = pd.date_range( StartDate, EndDate, feq = 'D' )
-    #YuEBao          = MMFundTimeSeriesLoader('000198').load( index_col = 4, date_cols = ['endDate', 'publishDate'] )
-    #YERet           = YuEBao.getReturnTS( StartDate, EndDate, HoldingPeriod)
-    import os
-    fundList = [filename.split('.')[0] for filename in os.listdir( './temp' )]
-    #with open( './refData/AvailableFundList.txt', 'w' ) as f:
-    for fund in [ '001884' ]:
-        Shen    = fundTSLoaderResolver( fund )
-        ShenRet = Shen.getReturnTS( StartDate, EndDate, HoldingPeriod )
-        if Shen.IsAvailableForTrading:
-            print( fund )
-    
-    #plt.plot( DateIndex, ShenRet )
-    #plt.show()

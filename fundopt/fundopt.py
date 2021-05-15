@@ -85,7 +85,9 @@ class BaseFundOptimizer(object):
             else:
                 print( 'Optimisation failed. Keep current position' )
 
-        return optPos
+        trade = pd.Series(optPos, index=self.fundList)
+        trade = trade[trade.abs()>0.1]
+        return trade
 
 
 class FundTargetRetOptimiser(BaseFundOptimizer):
