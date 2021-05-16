@@ -1,3 +1,4 @@
+from cvxpy.reductions.solvers import solver
 import numpy as np
 import cvxpy as cvx
 import pandas as pd
@@ -54,7 +55,7 @@ class BaseFundOptimizer(object):
 
         return resultStr
 
-    def getOptimalPosition(self, currentPosition, verbose = False, **kwargs):
+    def getOptimalPosition(self, currentPosition, solver_options, **kwargs):
         """Get optimal trades at given current position
         
         Arguments:
@@ -71,7 +72,7 @@ class BaseFundOptimizer(object):
         self.cvxTrades = cvx.Variable( currentPosition.shape )
         self._genProblem(currentPosition, **kwargs)
         try:
-            self.cvxProblem.solve(verbose = verbose, solver = cvx.ECOS)
+            self.cvxProblem.solve(**solver_options)
         except:
             optPos = np.zeros_like(currentPosition)
         if self.cvxProblem.status in [ cvx.OPTIMAL, cvx.OPTIMAL_INACCURATE ]:
@@ -79,7 +80,7 @@ class BaseFundOptimizer(object):
         else:
             optPos = np.zeros_like(currentPosition)
 
-        if verbose:
+        if solver_options.get('verbose') == True:
             if self.cvxProblem.status in [ cvx.OPTIMAL, cvx.OPTIMAL_INACCURATE ]:
                 print( self._interpretResult(optPos) )
             else:

@@ -5,6 +5,14 @@ import pandas   as pd
 import numpy    as np
 import datetime as dt
 import logging
+import cvxpy as cvx
+from collections import namedtuple
+
+solver_options = {
+    'verbose' : True, 
+    'max_iters' : 400,
+    'solver'  : cvx.GLPK,
+}
 
 def roll_position(position, start, end):
     """Roll fund position from start to end
@@ -23,6 +31,27 @@ def roll_position(position, start, end):
 
     return final_position
 
+BacktestSpec = namedtuple('BacktestSpec', 'lookback_start lookback_end rolling_end')
+
+def generate_backtest_sequence(start, end, lookback_period, trading_period):
+    
+    lookback_start = start
+    lookback_end = lookback_start + pd.offsets.BDay(lookback_period)
+
+    next_start = lookback_start + pd.offsets.BDay(trading_period)
+    next_end = next_start + pd.offsets.BDay(lookback_period)
+
+    sequence = []
+    while next_end <= end:
+        sequence.append( BacktestSpec( lookback_start, lookback_end, next_end ) )
+
+        lookback_start = next_start
+        lookback_end = lookback_start + pd.offsets.BDay(lookback_period)
+
+        next_start = lookback_start + pd.offsets.BDay(trading_period)
+        next_end = next_start + pd.offsets.BDay(lookback_period)
+
+    return sequence        
 
 if __name__ == "__main__":
     logging.basicConfig( level = logging.INFO )
@@ -32,11 +61,9 @@ if __name__ == "__main__":
     holding = 20
     
     fund_returns = pd.read_pickle('./{}_{}_{}.pkl'.format(start, end, holding))
-    fund_returns = fund_returns.drop('003064', axis=1)
+    fund_returns = fund_returns.drop(['003064','502036', '512300', '510070'], axis=1)
 
-    target_ret = 0.12
-    sample_months = 6
-    roll_months = 1
+    target_ret = 0.02
 
     opt = FundTargetRetMinCVaROptimiser(
         targetRet=target_ret, 
@@ -48,24 +75,25 @@ if __name__ == "__main__":
     startPosition['020005'] = 44499.0
     currentPosition = startPosition
 
-    lookback_start = dt.date(2020, 1, 7)
-    lookback_end = lookback_start + pd.offsets.BDay(120)
+    backtest_start = dt.date(2020, 2, 7)
+    backtest_end = end
+    sequence = generate_backtest_sequence(backtest_start, backtest_end, 120, 20)
 
+    positions = []
+    for lookback_start, lookback_end, rolling_end in sequence:
 
-    while lookback_end <= end:
-        # lookback = pd.bdate_range(lookback_start, lookback_end)
-        # opt_trade = opt.getOptimalPosition(currentPosition, lookbackPeriod=lookback, verbose=False)
+        positions.append(currentPosition.to_frame().T.assign(date=lookback_end))
+        
+        lookback = pd.bdate_range(lookback_start, lookback_end)
+        
+        opt_trade = opt.getOptimalPosition(currentPosition, solver_options, lookbackPeriod=lookback)
 
-        # final = currentPosition.add(opt_trade, fill_value=0.0)
-        final = currentPosition
+        final = currentPosition.add(opt_trade, fill_value=0.0)
         final = final[final > 0.1]
 
-        next_start = lookback_start + pd.offsets.BDay(20)
-        next_end = next_start + pd.offsets.BDay(120)
-
-        currentPosition = roll_position(final, lookback_end, next_end)
-
-        lookback_start = next_start
-        lookback_end = next_end
-
+        currentPosition = roll_position(final, lookback_end, rolling_end)
+    positions.append(currentPosition.to_frame().T.assign(date=rolling_end))
+    history = pd.concat(positions).set_index('date').fillna(0.0)
+    
+    history.to_csv('backtest.csv')
         
