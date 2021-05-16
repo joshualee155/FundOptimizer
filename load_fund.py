@@ -3,7 +3,7 @@ import pandas   as pd
 import numpy    as np
 import datetime as dt
 import logging
-from arctic import CHUNK_STORE, Arctic
+from arctic import CHUNK_STORE, Arctic # pyright: reportMissingImports=false
 
 a = Arctic('localhost')
 a.initialize_library('fund', lib_type=CHUNK_STORE)

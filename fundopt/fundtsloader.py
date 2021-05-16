@@ -7,7 +7,7 @@ from   utils.fundoptutils import getFundType, FundType
 from functools import partial
 import multiprocessing as mp
 import logging
-from arctic import Arctic
+from arctic import Arctic # pyright: reportMissingImports=false
 
 a = Arctic( 'localhost' )
 lib = a['fund']

@@ -1,4 +1,4 @@
-from arctic import Arctic
+from arctic import Arctic # pyright: reportMissingImports=false
 import os 
 import pandas as pd
 
