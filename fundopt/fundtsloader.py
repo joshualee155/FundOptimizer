@@ -11,7 +11,7 @@ from arctic import Arctic
 
 a = Arctic( 'localhost' )
 lib = a['fund']
-
+lib_adj = a['fund_adj']
 
 class FundTimeSeriesLoader(object):
 
@@ -138,14 +138,31 @@ class MMFundTimeSeriesLoader(FundTimeSeriesLoader):
 
 
 class OpenFundTimeSeriesLoader(FundTimeSeriesLoader):
-    
+
+    fund_adj = None
+
+    def load(self, start, end):
+        super(OpenFundTimeSeriesLoader, self).load(start, end)
+        dates = self.generate_request_dates(start, end)
+        self.fund_adj = lib_adj.read(self.fundCode, chunk_range=dates)
+
     def getReturnByDate( self, start, end ):
-        if start > self._rawData.index.min() or end < self._rawData.index.max():
+        if start > self._rawData.index.min() or end < self._rawData.index.max() or self.fund_adj is None:
             self.load( start, end )
-        startNAV, startAccNAV = self._rawData[ ['NAV', 'ACC_NAV'] ].loc[start]
-        endAccNAV             = self._rawData[ 'ACC_NAV' ][end]
+
+        adj = self.fund_adj.loc[start:end]
+        nav = self._rawData.loc[start:end, 'NAV']
+        for row in adj.itertuples(index=True):
+            if row.type == 'div':
+                nav[row.Index:] += row.amount
+            elif row.type == 'split':
+                nav[row.Index:] *= row.amount
+            else:
+                logging.error(f'Unknown adjustment type: {row.type}. Ingored.')
+
+        ret = nav[end] / nav[start] - 1.0
         
-        return (endAccNAV - startAccNAV)/startNAV
+        return ret
     
     def getReturnTS( self, start, end, offset = 1  ):
         if start > self._rawData.index.min() or end < self._rawData.index.max():

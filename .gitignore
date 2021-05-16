@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 
 # Data CSV files
+*temp/
 temp/
 temp2/
 temp3/
