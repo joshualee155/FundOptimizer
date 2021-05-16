@@ -167,15 +167,24 @@ class OpenFundTimeSeriesLoader(FundTimeSeriesLoader):
     def getReturnTS( self, start, end, offset = 1  ):
         if start > self._rawData.index.min() or end < self._rawData.index.max():
             self.load( start, end )
-        nav = self._rawData.loc[start:end]
-        if self.IsAvailableForTrading: 
-            startNAV    = nav[ 'NAV' ].shift(offset)
-            startAccNAV = nav[ 'ACC_NAV' ].shift(offset)
-            endAccNAV   = nav[ 'ACC_NAV' ]
+
+        adj = self.fund_adj.loc[start:end]
+        nav = self._rawData.loc[start:end, 'NAV']
+
+        for row in adj.itertuples(index=True):
+            if row.type == 'div':
+                nav[row.Index:] += row.amount
+            elif row.type == 'split':
+                nav[row.Index:] *= row.amount
+            else:
+                logging.error(f'Unknown adjustment type: {row.type}. Ingored.')
+
+        start_nav = nav.shift(offset)
+        end_nav = nav
         
-            return (endAccNAV - startAccNAV)/startNAV
-        else:
-            return None
+        ret = (end_nav/start_nav) - 1
+        
+        return ret
 
     def _postProcess( self ):
         super( OpenFundTimeSeriesLoader, self )._postProcess()
