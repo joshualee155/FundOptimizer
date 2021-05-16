@@ -21,6 +21,8 @@ if __name__ == "__main__":
     funds.remove('003254') # data issue
     funds.remove('003255') # data issue
     funds.remove('001481') # QDII funds, not sold on Ant Financial
+    funds.remove('512310') # stopped funds
+    funds.remove('512340') # stopped funds
 
     fund_returns=load_funds(funds, start, end, holding)
     fund_returns.to_pickle('./{}_{}_{}.pkl'.format(start, end, holding))

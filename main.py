@@ -13,13 +13,13 @@ if __name__ == "__main__":
     
     fund_returns = pd.read_pickle('./{}_{}_{}.pkl'.format(start, end, holding))
 
-    fund_returns.drop('003064', axis=1, inplace=True)
+    fund_returns.drop(['003064','502036', '512300', '510070'], axis=1, inplace=True)
 
     lookback = pd.bdate_range('2020-11-07', '2021-05-07')
 
     opt = FundTargetRetMinCVaROptimiser(
     # opt = FundTargetRetMinVarianceOptimiser(
-        targetRet=0.10, 
+        targetRet=0.12, 
         returns=fund_returns)
 
     currentPosition=pd.Series(dtype=float)
