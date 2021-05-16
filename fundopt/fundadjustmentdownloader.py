@@ -1,7 +1,15 @@
 import requests
 from bs4 import BeautifulSoup
-
+import multiprocessing as mp
+import os 
 import pandas as pd
+from arctic import Arctic
+
+lib = Arctic('localhost')
+fund = lib['fund']
+
+folder = './adj_temp'
+os.makedirs(folder, exist_ok=True)
 
 def get_fund_split_data(symbol):
     """Download fund split data from Tiantian Jijinwang
@@ -93,3 +101,27 @@ def get_fund_adj_data(symbol):
     adj = pd.concat([split, div]).sort_index()
 
     return adj
+
+def save_fund_adj_data(symbol):
+    """Save fund adjustment data to local folder
+
+    Args:
+        symbol (str): fund symbol
+    """
+    adj = get_fund_adj_data(symbol)
+    adj.to_csv(f'{folder}/{symbol}.csv')
+
+def load_funds(symbols, multiprocessing=True):
+
+    if multiprocessing:
+        pool = mp.Pool(8)
+        r = pool.map(save_fund_adj_data,symbols)
+    else:
+        for symbol in symbols:
+            save_fund_adj_data(symbol)
+
+if __name__ == "__main__":
+    symbols = fund.list_symbols()
+
+    load_funds(symbols)
+
