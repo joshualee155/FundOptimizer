@@ -39,7 +39,8 @@ class FundTimeSeriesLoader(object):
 
         self.IsAvailableForOptimisation = (len( cachedDates ) / len( requestDates )) > 0.9
 
-        requestDf = cachedDf.reindex( requestDates, method = 'ffill' )
+        # Do a forward fill but not the NaNs in the end
+        requestDf = cachedDf.reindex( requestDates ).apply(lambda x: x.loc[:x.last_valid_index()].ffill())
         requestDf.dropna( axis = 0, how = 'any', inplace = True )
 
         return requestDf
@@ -113,10 +114,10 @@ class MMFundTimeSeriesLoader(FundTimeSeriesLoader):
         Returns:
             pd.Series: return time series
         """
-        if start > self._rawData.index.min() or end < self._rawData.index.max():
-            self.load( start, end )
-        
         if self.IsAvailableForTrading:
+            if start > self._rawData.index.min() or end < self._rawData.index.max():
+                self.load( start, end )
+        
             daily = self._rawData['dailyProfit'].loc[start:end]
         
             starts = pd.bdate_range(start, end)
@@ -143,8 +144,14 @@ class OpenFundTimeSeriesLoader(FundTimeSeriesLoader):
 
     def load(self, start, end):
         super(OpenFundTimeSeriesLoader, self).load(start, end)
-        dates = self.generate_request_dates(start, end)
-        self.fund_adj = lib_adj.read(self.fundCode, chunk_range=dates)
+        self.load_fund_adj(start, end)
+
+    def load_fund_adj(self, start, end):
+        if lib_adj.has_symbol(self.fundCode):
+            dates = self.generate_request_dates(start, end)
+            self.fund_adj = lib_adj.read(self.fundCode, chunk_range=dates)
+        else:
+            self.fund_adj = pd.DataFrame()
 
     def getReturnByDate( self, start, end ):
         if start > self._rawData.index.min() or end < self._rawData.index.max() or self.fund_adj is None:
@@ -168,23 +175,26 @@ class OpenFundTimeSeriesLoader(FundTimeSeriesLoader):
         if start > self._rawData.index.min() or end < self._rawData.index.max():
             self.load( start, end )
 
-        adj = self.fund_adj.loc[start:end]
-        nav = self._rawData.loc[start:end, 'NAV']
+        if self.IsAvailableForTrading:
+            adj = self.fund_adj.loc[start:end]
+            nav = self._rawData.loc[start:end, 'NAV']
 
-        for row in adj.itertuples(index=True):
-            if row.type == 'div':
-                nav[row.Index:] += row.amount
-            elif row.type == 'split':
-                nav[row.Index:] *= row.amount
-            else:
-                logging.error(f'Unknown adjustment type: {row.type}. Ingored.')
+            for row in adj.itertuples(index=True):
+                if row.type == 'div':
+                    nav[row.Index:] += row.amount
+                elif row.type == 'split':
+                    nav[row.Index:] *= row.amount
+                else:
+                    logging.error(f'Unknown adjustment type: {row.type}. Ingored.')
 
-        start_nav = nav.shift(offset)
-        end_nav = nav
-        
-        ret = (end_nav/start_nav) - 1
-        
-        return ret
+            start_nav = nav.shift(offset)
+            end_nav = nav
+            
+            ret = (end_nav/start_nav) - 1
+            
+            return ret
+        else:
+            return None
 
     def _postProcess( self ):
         super( OpenFundTimeSeriesLoader, self )._postProcess()

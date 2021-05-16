@@ -81,7 +81,6 @@ def download_of( fundCode, startDate, endDate ):
         dataDf.set_index( 'Date', inplace = True )
         dataDf = dataDf[ ~dataDf.index.duplicated() ]
         dataDf.sort_index( inplace = True )
-        dataDf = dataDf.reindex( requestDates, method = 'ffill' )
         dataDf.dropna( inplace = True )
         dataDf.to_csv( folder + '/%s.csv' % fundCode )
         return fundCode
@@ -146,24 +145,11 @@ def download_mmf( fundCode, startDate, endDate ):
 
 if __name__ == '__main__':
 
-    from functools import partial
-    # import os
-    # os.makedirs(folder)
-
     fundList, fundTypes  = np.genfromtxt( './refData/fund_list.csv', dtype = str, delimiter = ',', unpack = True  )
-    # fundList  = [ fund.zfill(6) for fund, fundType in zip(fundList, fundTypes) if fundType != 'MMF' ]
 
     endDate   = '%s' % date.today()
     startDate = '2020-01-01'
 
-    # fundAvail = [filename.split('.')[0] for filename in os.listdir( './temp/' ) ]
-    
-    # fundList  = list( set( fundList ).difference( fundAvail ) )
-    # fundList = [ '000198' ]
-    # pool = mp.Pool( 8 )
-    # to_apply = partial( download_of, startDate = startDate, endDate = endDate )
-    # r = pool.map( to_apply , fundList )
-    
     for fund, fundType in zip(fundList, fundTypes):
         fundCode = fund.zfill(6)
         time.sleep(0.01)
@@ -174,8 +160,4 @@ if __name__ == '__main__':
         download_fn( fundCode, startDate, endDate )
     print("Done!")
 
-    # download_of( fundList[0] )
-
-    # for fund in fundList:
-    #     download_mmf( fund )
-    # print( "Done!" )
+    # download_of( '512310', startDate, endDate )
