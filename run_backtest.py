@@ -63,7 +63,7 @@ if __name__ == "__main__":
     fund_returns = pd.read_pickle('./{}_{}_{}.pkl'.format(start, end, holding))
     fund_returns = fund_returns.drop(['003064','502036', '512300', '510070'], axis=1)
 
-    target_ret = 0.02
+    target_ret = 0.06
 
     opt = FundTargetRetMinCVaROptimiser(
         targetRet=target_ret, 
@@ -77,7 +77,9 @@ if __name__ == "__main__":
 
     backtest_start = dt.date(2020, 2, 7)
     backtest_end = end
-    sequence = generate_backtest_sequence(backtest_start, backtest_end, 120, 20)
+    lookback_period = 120 # use 120 business days data (half year) to build optimization problem
+    trading_period = 20 # rebalance every 20 business days
+    sequence = generate_backtest_sequence(backtest_start, backtest_end, lookback_period, trading_period)
 
     positions = []
     for lookback_start, lookback_end, rolling_end in sequence:
@@ -95,5 +97,5 @@ if __name__ == "__main__":
     positions.append(currentPosition.to_frame().T.assign(date=rolling_end))
     history = pd.concat(positions).set_index('date').fillna(0.0)
     
-    history.to_csv('backtest.csv')
+    history.to_csv(f'backtest_{backtest_start}_{backtest_end}_{lookback_period}_{trading_period}_{target_ret}.csv')
         
