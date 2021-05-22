@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 import multiprocessing as mp
 import os 
 import pandas as pd
-from arctic import Arctic
+from arctic import Arctic # pyright: reportMissingImports=false
 
 lib = Arctic('localhost')
 fund = lib['fund']
@@ -22,7 +22,7 @@ def get_fund_split_data(symbol):
     """
     url = f'http://fundf10.eastmoney.com/fhsp_{symbol}.html'
     res = requests.get(url)
-    html = BeautifulSoup(res.text)
+    html = BeautifulSoup(res.text, features="lxml")
     split_data = html.find('table', attrs={'class':'w782 comm fhxq'})
     split = pd.read_html(str(split_data))[0]
     

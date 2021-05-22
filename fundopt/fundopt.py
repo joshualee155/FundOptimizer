@@ -100,7 +100,7 @@ class FundTargetRetOptimiser(BaseFundOptimizer):
     def _genConstraints(self, currentPosition, lookbackPeriod=None):
         super(FundTargetRetOptimiser, self)._genConstraints(currentPosition)
         if lookbackPeriod is not None:
-            returns = self.returns.loc[lookbackPeriod].fillna(0.0).values
+            returns = self.returns.reindex(lookbackPeriod).fillna(0.0).values
         else:
             returns = self.returns.fillna(0.0).values
         Mu = np.mean(returns, axis = 0)
@@ -115,7 +115,7 @@ class FundTargetRetMinCVaROptimiser(FundTargetRetOptimiser):
 
     def _genObjectiveFunc(self, currentPosition, lookbackPeriod=None):
         if lookbackPeriod is not None:
-            returns = self.returns.loc[lookbackPeriod].fillna(0.0).values
+            returns = self.returns.reindex(lookbackPeriod).fillna(0.0).values
         else:
             returns = self.returns.fillna(0.0).values
         T, _ = returns.shape
@@ -129,7 +129,7 @@ class FundTargetRetMinVarianceOptimiser(FundTargetRetOptimiser):
 
     def _genObjectiveFunc(self, currentPosition, lookbackPeriod=None):
         if lookbackPeriod is not None:
-            returns = self.returns.loc[lookbackPeriod]
+            returns = self.returns.reindex(lookbackPeriod)
         else:
             returns = self.returns
         sigma = returns.cov().values

@@ -18,19 +18,19 @@ class FundTimeSeriesLoader(object):
 
     __metaclass__ = ABCMeta
 
-    _rawData  = None
+    fund_nav  = None
     
     def __init__( self, fundCode ):
         self.fundCode = fundCode
         
     def load( self, startDate, endDate ):
-        self._rawData   = self.getData( startDate, endDate )
+        self.fund_nav   = self.getData( startDate, endDate )
 
         self._postProcess()
         # self._rawData   = self._rawData.resample('D').pad()
 
-        self.IsAvailableForTrading = (self._rawData.index[-1].date() >= endDate)
-        self.IsAvailableForOptimisation &= (self._rawData.index[0].date() <= startDate)
+        self.is_available_for_trading = (self.fund_nav.index[-1].date() >= endDate)
+        self.IsAvailableForOptimisation &= (self.fund_nav.index[0].date() <= startDate)
 
     def getData( self, startDate, endDate ):
 
@@ -52,11 +52,11 @@ class FundTimeSeriesLoader(object):
     def _postProcess(self):
         # if 'Unnamed: 0' in self._rawData:
         #     self._rawData.drop( columns = [ 'Unnamed: 0' ], inplace = True )
-        self._rawData = self._rawData[ ~self._rawData.index.duplicated() ]
-        self._rawData.sort_index( inplace = True )
+        self.fund_nav = self.fund_nav[ ~self.fund_nav.index.duplicated() ]
+        self.fund_nav.sort_index( inplace = True )
 
     @abstractmethod
-    def getReturnTS(self, start, end, offset):
+    def getReturnTS(self, start, end, offset, back_test_mode):
         pass
 
     @abstractmethod
@@ -99,11 +99,11 @@ class MMFundTimeSeriesLoader(FundTimeSeriesLoader):
                    then return from day 1 to day 10 will be
                    1.5 x 10 / 10000 = 0.0015
         """
-        if start > self._rawData.index.min() or end < self._rawData.index.max():
+        if start > self.fund_nav.index.min() or end < self.fund_nav.index.max():
             self.load( start, end )
-        return sum( self._rawData['dailyProfit'][start:end] )/10000.
+        return sum( self.fund_nav['dailyProfit'][start:end] )/10000.
 
-    def getReturnTS( self, start, end, offset = 1 ):
+    def getReturnTS(self, start, end, offset=1, back_test_mode=False):
         """Generate (overlapping) returns
 
         Args:
@@ -114,11 +114,11 @@ class MMFundTimeSeriesLoader(FundTimeSeriesLoader):
         Returns:
             pd.Series: return time series
         """
-        if self.IsAvailableForTrading:
-            if start > self._rawData.index.min() or end < self._rawData.index.max():
+        if self.is_available_for_trading or back_test_mode:
+            if start > self.fund_nav.index.min() or end < self.fund_nav.index.max():
                 self.load( start, end )
         
-            daily = self._rawData['dailyProfit'].loc[start:end]
+            daily = self.fund_nav['dailyProfit'].loc[start:end]
         
             starts = pd.bdate_range(start, end)
             ends = starts + pd.offsets.BDay(offset)
@@ -154,11 +154,11 @@ class OpenFundTimeSeriesLoader(FundTimeSeriesLoader):
             self.fund_adj = pd.DataFrame()
 
     def getReturnByDate( self, start, end ):
-        if start > self._rawData.index.min() or end < self._rawData.index.max() or self.fund_adj is None:
+        if start > self.fund_nav.index.min() or end < self.fund_nav.index.max() or self.fund_adj is None:
             self.load( start, end )
 
         adj = self.fund_adj.loc[start:end]
-        nav = self._rawData.loc[start:end, 'NAV']
+        nav = self.fund_nav.loc[start:end, 'NAV']
         for row in adj.itertuples(index=True):
             if row.type == 'div':
                 nav[row.Index:] += row.amount
@@ -170,14 +170,14 @@ class OpenFundTimeSeriesLoader(FundTimeSeriesLoader):
         ret = nav[end] / nav[start] - 1.0
         
         return ret
-    
-    def getReturnTS( self, start, end, offset = 1  ):
-        if start > self._rawData.index.min() or end < self._rawData.index.max():
-            self.load( start, end )
 
-        if self.IsAvailableForTrading:
+    def getReturnTS( self, start, end, offset=1, back_test_mode=False  ):
+
+        if self.is_available_for_trading or back_test_mode:
+            if start < self.fund_nav.index.min() or end > self.fund_nav.index.max():
+                self.load( start, end )
             adj = self.fund_adj.loc[start:end]
-            nav = self._rawData.loc[start:end, 'NAV']
+            nav = self.fund_nav.loc[start:end, 'NAV']
 
             for row in adj.itertuples(index=True):
                 if row.type == 'div':
@@ -205,12 +205,12 @@ class OpenFundTimeSeriesLoader(FundTimeSeriesLoader):
         Ugly tweaks to fill the nan hole in ACCUM_NAV. sometimes nan in ACCUM_NAV, no clue for reasons
         :return:
         '''
-        inds = self._rawData['ACC_NAV'].isnull().to_numpy().nonzero()[0]
+        inds = self.fund_nav['ACC_NAV'].isnull().to_numpy().nonzero()[0]
 
         for ind in inds:
-            self._rawData.loc[ self._rawData.index[ind], 'ACC_NAV'] = self._rawData['NAV'].iloc[ind] \
-                                                    - self._rawData['NAV'].iloc[ind-1] \
-                                                    + self._rawData['ACC_NAV'].iloc[ind-1]
+            self.fund_nav.loc[ self.fund_nav.index[ind], 'ACC_NAV'] = self.fund_nav['NAV'].iloc[ind] \
+                                                    - self.fund_nav['NAV'].iloc[ind-1] \
+                                                    + self.fund_nav['ACC_NAV'].iloc[ind-1]
         return
 
 def getTSLoader( fundCode ):
