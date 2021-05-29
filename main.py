@@ -1,3 +1,4 @@
+from cvxpy.reductions.solvers import solver
 from   fundopt.fundopt import FundTargetRetMinCVaROptimiser, FundTargetRetMinVarianceOptimiser
 import pandas   as pd
 import numpy    as np
@@ -9,14 +10,14 @@ if __name__ == "__main__":
     logging.basicConfig( level = logging.INFO )
 
     start = dt.date(2020, 1, 1)
-    end   = dt.date(2021, 5, 21)
+    end   = dt.date(2021, 5, 28)
     holding = 20
     
     fund_returns = pd.read_pickle('./{}_{}_{}.pkl'.format(start, end, holding))
 
     fund_returns.drop(['003064'], axis=1, inplace=True)
 
-    lookback = pd.bdate_range('2020-11-21', '2021-05-21')
+    lookback = pd.bdate_range('2020-11-28', '2021-05-28')
 
     print( f"Look back period from {lookback.min()} to {lookback.max()}" )
     print( "Top 5 high return funds:")
@@ -26,12 +27,20 @@ if __name__ == "__main__":
         targetRet=0.05, 
         returns=fund_returns)
 
-    currentPosition=pd.Series(dtype=float)
-    currentPosition['163406'] = 117108.0
-    currentPosition['020005'] = 44499.0
+    current=pd.Series(dtype=float)
+    current['163406'] = 117108.0
+    current['020005'] = 44499.0
 
     solver_options = { 
         'verbose' : True,
-        'solver'  : cvx.GLPK,
+        'solver'  : cvx.ECOS,
      }
-    opt.getOptimalPosition(currentPosition, lookbackPeriod=lookback, solver_options=solver_options)
+    opt.getOptimalPosition(current, lookbackPeriod=lookback, solver_options=solver_options)
+
+    print(opt.targetRet.value, opt.cvxProblem.value)
+    
+    # for target_ret in [0.055, 0.05, 0.04, 0.03, 0.02, 0.01]:
+    #     opt.set_target_ret_and_rerun(target_ret, solver_options)
+    #     print(opt.targetRet.value, opt.cvxProblem.value)
+
+    # final = current.add(opt_trade, fill_value=0.0)

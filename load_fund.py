@@ -14,7 +14,7 @@ if __name__ == "__main__":
     logging.basicConfig( level = logging.INFO )
 
     start = dt.date(2020, 1, 1)
-    end   = dt.date(2021, 5, 21)
+    end   = dt.date(2021, 5, 28)
     holding = 20
     
     funds = lib.list_symbols()
@@ -25,4 +25,4 @@ if __name__ == "__main__":
     funds.remove('512340') # stopped funds
 
     fund_returns=load_funds(funds, start, end, holding)
-    fund_returns.to_pickle('./{}_{}_{}_v2.pkl'.format(start, end, holding))
+    fund_returns.to_pickle('./{}_{}_{}.pkl'.format(start, end, holding))

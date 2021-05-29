@@ -148,7 +148,7 @@ if __name__ == '__main__':
     fundList, fundTypes  = np.genfromtxt( './refData/fund_list.csv', dtype = str, delimiter = ',', unpack = True  )
 
     endDate   = '%s' % date.today()
-    startDate = '2021-05-15'
+    startDate = '2021-05-22'
 
     for fund, fundType in zip(fundList, fundTypes):
         fundCode = fund.zfill(6)

@@ -74,11 +74,6 @@ class FundTimeSeriesLoader(object):
 
         return localData, dates
 
-    @abstractmethod
-    def writeLocalData(self):
-        pass
-
-    
 
 class MMFundTimeSeriesLoader(FundTimeSeriesLoader):
         

@@ -44,16 +44,13 @@ class BaseFundOptimizer(object):
         pass
 
     def _interpretResult(self, optPos):
-        sellPos = optPos < -1.
-        buyPos  = optPos > 1.
-        resultStr = ''
-        fundArray = np.array( self.fundList, dtype = str )
-        for sellFund, sellQuant in zip(fundArray[sellPos], optPos[sellPos]):
-            resultStr += 'Sell fund %s for %.2f Yuan\n' % (sellFund, abs(sellQuant))
-        for buyFund,  buyQuant  in zip(fundArray[buyPos],  optPos[buyPos]):
-            resultStr += 'Buy  fund %s for %.2f Yuan\n' % (buyFund, buyQuant)
+        action = pd.DataFrame(data=zip(self.fundList, optPos), columns=['FUND', 'TRADE_NTL'])
+        action = action[action['TRADE_NTL'].abs()>0.1]
+        action['DIRECTION'] = np.where(action['TRADE_NTL']>0.0, 'BUY', 'SELL')
+        action['GROSS_NTL'] = action['TRADE_NTL'].abs()
+        action = action.sort_values(['DIRECTION', 'GROSS_NTL'], ascending=False)
 
-        return resultStr
+        return action
 
     def getOptimalPosition(self, currentPosition, solver_options, **kwargs):
         """Get optimal trades at given current position
@@ -71,21 +68,23 @@ class BaseFundOptimizer(object):
         currentPosition = currentPosition.reindex(self.fundList).fillna(0.0).values
         self.cvxTrades = cvx.Variable( currentPosition.shape )
         self._genProblem(currentPosition, **kwargs)
+        trade = self.solve(solver_options)
+        return trade
+
+    def solve(self, solver_options):
         try:
             self.cvxProblem.solve(**solver_options)
         except:
-            optPos = np.zeros_like(currentPosition)
+            optPos = np.zeros(self.cvxTrades.shape)
         if self.cvxProblem.status in [ cvx.OPTIMAL, cvx.OPTIMAL_INACCURATE ]:
             optPos = np.round(np.squeeze(np.array(self.cvxTrades.value)), decimals = 2)
         else:
-            optPos = np.zeros_like(currentPosition)
-
+            optPos = np.zeros(self.cvxTrades.shape)
         if solver_options.get('verbose') == True:
             if self.cvxProblem.status in [ cvx.OPTIMAL, cvx.OPTIMAL_INACCURATE ]:
                 print( self._interpretResult(optPos) )
             else:
                 print( 'Optimisation failed. Keep current position' )
-
         trade = pd.Series(optPos, index=self.fundList)
         trade = trade[trade.abs()>0.1]
         return trade
@@ -95,7 +94,12 @@ class FundTargetRetOptimiser(BaseFundOptimizer):
 
     def __init__(self, targetRet = 0.01, *args, **kwargs):
         super(FundTargetRetOptimiser, self).__init__( *args, **kwargs )
-        self.targetRet = targetRet
+        self.targetRet = cvx.Parameter(value=targetRet)
+
+    def set_target_ret_and_rerun(self, target_ret, solver_options):
+        self.targetRet.value = target_ret
+        trade = self.solve(solver_options)
+        return trade
 
     def _genConstraints(self, currentPosition, lookbackPeriod=None):
         super(FundTargetRetOptimiser, self)._genConstraints(currentPosition)
