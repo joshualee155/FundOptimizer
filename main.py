@@ -10,14 +10,14 @@ if __name__ == "__main__":
     logging.basicConfig( level = logging.INFO )
 
     start = dt.date(2020, 1, 1)
-    end   = dt.date(2021, 5, 28)
+    end   = dt.date(2021, 9, 30)
     holding = 20
     
     fund_returns = pd.read_pickle('./{}_{}_{}.pkl'.format(start, end, holding))
 
-    fund_returns.drop(['003064'], axis=1, inplace=True)
+    fund_returns.drop(['001487'], axis=1, inplace=True)
 
-    lookback = pd.bdate_range('2020-11-28', '2021-05-28')
+    lookback = pd.bdate_range('2021-03-30', '2021-09-30')
 
     print( f"Look back period from {lookback.min()} to {lookback.max()}" )
     print( "Top 5 high return funds:")
@@ -28,12 +28,18 @@ if __name__ == "__main__":
         returns=fund_returns)
 
     current=pd.Series(dtype=float)
-    current['163406'] = 117108.0
-    current['020005'] = 44499.0
+    # current['001487'] = 68715.0
+    current['001951'] = 66926.0
+    current['502023'] = 41883.0
+    current['000198'] = 120000.0
 
     solver_options = { 
         'verbose' : True,
-        'solver'  : cvx.ECOS,
+        'solver'  : cvx.CBC,
+        # 'scipy_options' : {
+        #     'method' : 'highs',
+        #     'disp' : True,
+        # }
      }
     opt.getOptimalPosition(current, lookbackPeriod=lookback, solver_options=solver_options)
 

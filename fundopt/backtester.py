@@ -22,7 +22,15 @@ class Backtester:
         self.opt = opt
 
     def generate_backtest_sequence(self):
-    
+        """Generate a list of back test specs from
+            - lookback period
+            - trading period
+            - backtest start & end
+            rolled backwards from end to start
+
+        Returns:
+            List[BacktestSpec]: list of backtest specs
+        """
         rolling_end = self.backtest_end
         lookback_end = rolling_end - pd.offsets.BDay(self.trading_period)
         lookback_start = lookback_end - pd.offsets.BDay(self.lookback_period)
@@ -61,6 +69,7 @@ class Backtester:
 
         sequence = self.generate_backtest_sequence()
 
+        # positions = [current]
         positions = []
         for lookback_start, lookback_end, rolling_end in sequence:
             
